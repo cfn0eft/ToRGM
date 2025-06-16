@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ありがとう店長！</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --titleColor: #273246;
+      --baseColor: #7494c0;
+      --myTextColor: #8de055;
+    }
+    body { font-family: sans-serif; background: var(--baseColor); text-align: center; margin: 0; overflow-x: hidden; }
+    .screen { display: none; padding: 2em; }
+    .active { display: block; }
+    .btn { padding: 1em 2em; font-size: 1.2em; margin-top: 1em; }
+    #puzzle { display: grid; grid-template-columns: repeat(3, 100px); grid-gap: 4px; justify-content: center; margin: 2em auto; }
+    .tile { width: 100px; height: 100px; background-size: 300px 300px; border: 2px solid #333; cursor: pointer; transition: transform 0.2s; }
+    .tile:hover { transform: scale(1.05); }
+    .empty { background: #ddd; cursor: default; }
+    .line_container { max-width: 400px; margin: 0 auto; background: var(--baseColor); border-radius: 10px; overflow: hidden; }
+    .line_title { background: var(--titleColor); color: white; padding: 10px; font-weight: bold; text-align: left; }
+    .line_contents { padding: 10px; background: white; height: 450px; text-align: left; overflow-y: auto; }
+    .bubble { background: var(--myTextColor); border-radius: 10px; padding: 10px; margin: 10px 0; color: black; display: inline-block; position: relative; max-width: 80%; }
+    .bubble::after { content: ''; position: absolute; top: 10px; left: -10px; border: 10px solid transparent; border-right-color: var(--myTextColor); }
+    .confetti { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 999; overflow: hidden; }
+    .confetti-piece { position: absolute; width: 10px; height: 10px; background: hsl(var(--hue), 70%, 60%); animation: fall 3s linear forwards; }
+    @keyframes fall {
+      to { transform: translateY(100vh) rotateZ(360deg); opacity: 0; }
+    }
+    #skipBtn { position: absolute; top: 10px; right: 10px; padding: 0.5em 1em; font-size: 0.9em; background: #eee; border: 1px solid #ccc; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <audio id="notifySound" src="ta_ta_syupon01.mp3" preload="auto"></audio>
+
+  <div id="startScreen" class="screen active">
+    <h1>ありがとう!増田店長！</h1>
+    <button class="btn" onclick="startGame()">ゲームスタート</button>
+  </div>
+
+  <div id="puzzleScreen" class="screen">
+    <button id="skipBtn" onclick="skipPuzzle()">パズルをスキップ</button>
+    <h2>パズルを完成させよう！</h2>
+    <p>タイルをタップして空いている場所に移動しよう！</p>
+    <div id="puzzle"></div>
+  </div>
+
+  <div id="chatScreen" class="screen">
+    <div class="line_container">
+      <div class="line_title">諸藤大貴＠国分広瀬店</div>
+      <div class="line_contents" id="chatBox"></div>
+    </div>
+  </div>
+
+  <div class="confetti" id="confetti"></div>
+
+  <script>
+    const screens = {
+      start: document.getElementById('startScreen'),
+      puzzle: document.getElementById('puzzleScreen'),
+      chat: document.getElementById('chatScreen')
+    };
+
+    const notifySound = document.getElementById('notifySound');
+
+    function showScreen(name) {
+      Object.values(screens).forEach(s => s.classList.remove('active'));
+      screens[name].classList.add('active');
+    }
+
+    function startGame() {
+      showScreen('puzzle');
+      createPuzzle();
+    }
+
+    function skipPuzzle() {
+      positions = [...Array(9).keys()];
+      launchConfetti();
+      setTimeout(() => {
+        stopConfetti();
+        showChat();
+      }, 2000);
+    }
+
+    const puzzleContainer = document.getElementById('puzzle');
+    let positions = [...Array(9).keys()];
+    let emptyIndex = 8;
+
+    function shuffle(array) {
+      do {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+      } while (!isSolvable(array) || array.every((v, i) => v === i));
+    }
+
+    function isSolvable(arr) {
+      let inv = 0;
+      for (let i = 0; i < 9; i++) {
+        for (let j = i + 1; j < 9; j++) {
+          if (arr[i] !== 8 && arr[j] !== 8 && arr[i] > arr[j]) inv++;
+        }
+      }
+      return inv % 2 === 0;
+    }
+
+    function createPuzzle() {
+      shuffle(positions);
+      renderPuzzle();
+    }
+
+    function renderPuzzle() {
+      puzzleContainer.innerHTML = '';
+      positions.forEach((pos, i) => {
+        const div = document.createElement('div');
+        div.className = 'tile';
+        if (pos === 8) {
+          div.classList.add('empty');
+          emptyIndex = i;
+        } else {
+          div.style.backgroundImage = "url('46533_1.jpg')";
+          const x = (pos % 3) * -100;
+          const y = Math.floor(pos / 3) * -100;
+          div.style.backgroundPosition = `${x}px ${y}px`;
+          div.addEventListener('click', () => tryMove(i));
+        }
+        puzzleContainer.appendChild(div);
+      });
+    }
+
+    function tryMove(i) {
+      const dx = Math.abs((i % 3) - (emptyIndex % 3));
+      const dy = Math.abs(Math.floor(i / 3) - Math.floor(emptyIndex / 3));
+      if ((dx + dy) === 1) {
+        [positions[i], positions[emptyIndex]] = [positions[emptyIndex], positions[i]];
+        renderPuzzle();
+        if (positions.every((v, i) => v === i)) {
+          launchConfetti();
+          setTimeout(() => {
+            stopConfetti();
+            showChat();
+          }, 2000);
+        }
+      }
+    }
+
+    function launchConfetti() {
+      const container = document.getElementById('confetti');
+      container.innerHTML = '';
+      for (let i = 0; i < 100; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.style.left = Math.random() * 100 + '%';
+        piece.style.top = '-10px';
+        piece.style.setProperty('--hue', Math.floor(Math.random() * 360));
+        piece.style.animationDelay = Math.random() * 2 + 's';
+        container.appendChild(piece);
+      }
+    }
+
+    function stopConfetti() {
+      const container = document.getElementById('confetti');
+      container.innerHTML = '';
+    }
+
+    const messages = [
+      "増田店長、鹿児島での勤務おつかれさまでした！",
+      "隼人店で面接して頂いたときをずっと覚えています！",
+      "最初の店長が増田さんでよかったです！",
+      "新しい場所でも頑張ってくださいね！",
+      "ps 本当に梅酒美味しかったです！飲みに行きたかったです！"
+    ];
+
+    function showChat() {
+      showScreen('chat');
+      const box = document.getElementById('chatBox');
+      box.innerHTML = '';
+      let i = 0;
+      const interval = setInterval(() => {
+        const div = document.createElement('div');
+        div.className = 'bubble';
+        div.textContent = messages[i];
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+        notifySound.currentTime = 0;
+        notifySound.play();
+        i++;
+        if (i >= messages.length) clearInterval(interval);
+      }, 1500);
+    }
+  </script>
+</body>
+</html>
